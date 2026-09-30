@@ -494,20 +494,24 @@ class MiddleDaemon:
 
     def _runInputLoop(self, bank: PointerBank, ui: UInput) -> None:
         """Process events until stop or every physical pointer disappears."""
-        extraFds = self.modifiers.fds if self.modifiers else []
+        nextModifierRescan = time.monotonic() + 2.0
         for batch, readyExtras in iterPointerBankEvents(
             bank,
-            extraFds,
+            lambda: self.modifiers.fds if self.modifiers else [],
             timeoutSec=1.0 / max(1.0, self.config.scrollHz),
         ):
             if self._stop.is_set():
                 break
 
-            if self.modifiers and readyExtras:
+            if self.modifiers:
                 for fd in readyExtras:
                     device = self.modifiers.deviceForFd(fd)
                     if device is not None:
                         self.modifiers.drain(device)
+                now = time.monotonic()
+                if now >= nextModifierRescan:
+                    nextModifierRescan = now + 2.0
+                    self.modifiers.rescan()
 
             passthroughMiddle = self._shouldPassthroughMiddle()
 

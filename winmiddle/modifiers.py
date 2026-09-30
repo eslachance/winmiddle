@@ -57,7 +57,16 @@ class ModifierTracker:
     @classmethod
     def open(cls) -> ModifierTracker:
         tracker = cls()
+        tracker.rescan()
+        log.info("modifier tracker watching %d keyboard device(s)", len(tracker.devices))
+        return tracker
+
+    def rescan(self) -> None:
+        """Open keyboards we are not watching yet (hotplug / mode switch)."""
+        known = {device.path for device in self.devices}
         for path in list_devices():
+            if path in known:
+                continue
             try:
                 device = InputDevice(path)
             except OSError:
@@ -67,16 +76,15 @@ class ModifierTracker:
             if ecodes.KEY_A not in keys and ecodes.KEY_LEFTCTRL not in keys:
                 continue
             if not os.access(path, os.R_OK):
+                device.close()
                 continue
             try:
                 for code in device.active_keys():
                     if code in _MODIFIER_CODES:
-                        tracker._down.add(code)
-                tracker.devices.append(device)
+                        self._down.add(code)
+                self.devices.append(device)
             except OSError:
-                continue
-        log.info("modifier tracker watching %d keyboard device(s)", len(tracker.devices))
-        return tracker
+                device.close()
 
     @property
     def fds(self) -> list[int]:
@@ -104,7 +112,19 @@ class ModifierTracker:
         except BlockingIOError:
             return
         except OSError:
-            return
+            # Device vanished: its fd stays "readable" forever and would
+            # spin the input loop at 100% CPU, so stop watching it.
+            self.dropDevice(device)
+
+    def dropDevice(self, device: InputDevice) -> None:
+        if device in self.devices:
+            self.devices.remove(device)
+        try:
+            device.close()
+        except Exception:
+            pass
+        # Keys held on a vanished keyboard will never send their release.
+        self._down.clear()
 
     def isModifierHeld(self, modifierName: str) -> bool:
         name = normalizeModifierName(modifierName)

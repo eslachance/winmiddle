@@ -8,7 +8,7 @@ import select
 import threading
 import time
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Callable, Iterator
 
 from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
 
@@ -566,7 +566,7 @@ def iterDeviceEventsWithExtras(
 
 def iterPointerBankEvents(
     bank: PointerBank,
-    extraFds: list[int],
+    extraFds: Callable[[], list[int]] | list[int],
     timeoutSec: float = 0.01,
 ) -> Iterator[tuple[list[InputEvent], list[int]]]:
     """Yield (mouse_batch, ready_extra_fds) from every open pointer in the bank.
@@ -584,7 +584,7 @@ def iterPointerBankEvents(
             for path, pointer in bank.byPath.items()
             if pointer.device is not None
         }
-        watch = list(fdToPath.keys()) + list(extraFds)
+        watch = list(fdToPath.keys()) + list(extraFds() if callable(extraFds) else extraFds)
         try:
             ready, _, _ = select.select(watch, [], [], timeoutSec)
         except (OSError, ValueError) as error:
