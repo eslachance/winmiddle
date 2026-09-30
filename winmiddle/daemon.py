@@ -56,6 +56,19 @@ def shouldPassthroughMiddle(
     return False
 
 
+def probeVerdictAllows(verdict: str, *, holdOk: bool) -> bool:
+    """Only an explicit "no" blocks hold-scroll.
+
+    With hold enabled a tap is replayed as a real middle-click, so a wrong
+    "unknown" is harmless. Electron apps (Discord, …) and slow/stale a11y trees
+    routinely time out or return unknown; failing closed made scrolling flaky.
+    Toggle-only still needs a positive "yes": a tap there would be swallowed.
+    """
+    if verdict == "yes":
+        return True
+    return holdOk and verdict == "unknown"
+
+
 def skipScrollableProbe(focus: FocusState, nativeMiddleApps: list[str]) -> bool:
     """Browsers: skip AT-SPI — Chromium's tree often goes stale after tab switches."""
     return matchesAny(focus, nativeMiddleApps)
@@ -140,7 +153,7 @@ class MiddleDaemon:
         )
         return holdOk, toggleOk
 
-    def _scrollTargetAllowsAutoscroll(self) -> bool:
+    def _scrollTargetAllowsAutoscroll(self, holdOk: bool) -> bool:
         """True only when we should enter PENDING_MIDDLE / autoscroll."""
         focus = self.focusHub.snapshot()
         # native_middle + hold: tap already synthesizes a real middle-click, so
@@ -160,7 +173,7 @@ class MiddleDaemon:
             focus.resourceClass or "?",
             verdict,
         )
-        return verdict == "yes"
+        return probeVerdictAllows(verdict, holdOk=holdOk)
 
     def _enterAutoscroll(self, mode: Mode) -> None:
         focus = self.focusHub.snapshot()
@@ -442,7 +455,7 @@ class MiddleDaemon:
                 self.mode = Mode.MIDDLE_DRAG
                 return
 
-            if not self._scrollTargetAllowsAutoscroll():
+            if not self._scrollTargetAllowsAutoscroll(holdOk):
                 # Not a scrollable target (tab, button, game/no-a11y, …).
                 injectButton(ui, ecodes.BTN_MIDDLE, 1)
                 syn(ui)

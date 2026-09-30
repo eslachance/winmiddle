@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from winmiddle.daemon import shouldPassthroughMiddle, skipScrollableProbe
+from winmiddle.daemon import probeVerdictAllows, shouldPassthroughMiddle, skipScrollableProbe
 from winmiddle.focus import FocusState
 
 
@@ -46,9 +46,17 @@ def testSkipProbeOnlyForNativeMiddle():
     assert not skipScrollableProbe(_kate(), ["google-chrome"])
 
 
+def testUnknownProbeOnlyAllowedForHold():
+    assert probeVerdictAllows("yes", holdOk=False)
+    assert probeVerdictAllows("unknown", holdOk=True)
+    assert not probeVerdictAllows("unknown", holdOk=False)
+    assert not probeVerdictAllows("no", holdOk=True)
+
+
 if __name__ == "__main__":
     testNativeMiddleHoldDoesNotPassthrough()
     testNativeMiddleToggleOnlyPassthrough()
     testPassthroughAppsStillWin()
     testSkipProbeOnlyForNativeMiddle()
+    testUnknownProbeOnlyAllowedForHold()
     print("ok")
