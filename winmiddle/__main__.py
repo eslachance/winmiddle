@@ -133,7 +133,16 @@ def main(argv: list[str] | None = None) -> int:
     if config.requireScrollable:
         scrollProbe = ScrollProbe(timeoutSec=max(0.005, config.scrollProbeTimeoutMs / 1000.0))
 
-    daemon = MiddleDaemon(config, focusHub, overlayController, scrollProbe=scrollProbe)
+    cursorHider = None
+    if config.lockCursor and overlayController is not None:
+        from winmiddle.kwincursor import KwinCursorHider
+
+        cursorHider = KwinCursorHider()
+        cursorHider.ensureLoaded()
+
+    daemon = MiddleDaemon(
+        config, focusHub, overlayController, scrollProbe=scrollProbe, cursorHider=cursorHider
+    )
     thread = threading.Thread(target=daemon.run, name="winmiddle-input", daemon=True)
     thread.start()
 

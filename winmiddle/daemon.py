@@ -15,11 +15,13 @@ from winmiddle.devices import (
     DeviceLostError,
     PointerBank,
     createVirtualMouse,
+    createWarpPointer,
     forwardEvent,
     injectButton,
     injectRelative,
     iterPointerBankEvents,
     syn,
+    warpPointer,
 )
 from winmiddle.focus import FocusHub, FocusState, matchesAny
 from winmiddle.modifiers import ModifierTracker
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
 
     from winmiddle.config import Config
     from winmiddle.cursor import CursorController
+    from winmiddle.kwincursor import KwinCursorHider
     from winmiddle.scrollprobe import ScrollProbe
 
 log = logging.getLogger("winmiddle.daemon")
@@ -81,11 +84,14 @@ class MiddleDaemon:
         focusHub: FocusHub,
         overlay: CursorController | None,
         scrollProbe: ScrollProbe | None = None,
+        cursorHider: KwinCursorHider | None = None,
     ) -> None:
         self.config = config
         self.focusHub = focusHub
         self.overlay = overlay  # cursor controller (name kept for minimal churn)
         self.scrollProbe = scrollProbe
+        # Hides the pinned real cursor (needs the winmiddlecursor KWin effect).
+        self.cursorHider = cursorHider
         self.mode = Mode.IDLE
         self._stop = threading.Event()
         self._originX = 0.0
@@ -105,7 +111,11 @@ class MiddleDaemon:
         # Compositor cursor estimate during autoscroll (clamped to work area).
         self._pointerScreenX = 0.0
         self._pointerScreenY = 0.0
+        # Cursor lock: real pointer stays at the origin, ghost shows _pointerScreen*.
+        self._cursorLocked = False
+        self._lockDesktop: tuple[int, int, int, int] | None = None
         self.ui: UInput | None = None
+        self.warp: UInput | None = None
         self.pointer = None
         self.modifiers: ModifierTracker | None = None
 
@@ -187,6 +197,17 @@ class MiddleDaemon:
         self._wheelAccumY = 0.0
         self._lastScrollTs = time.monotonic()
         self._autoscrollEnterTs = time.monotonic()
+        self._cursorLocked = bool(
+            self.config.lockCursor and self.warp is not None and focus.desktop is not None
+        )
+        self._lockDesktop = focus.desktop if self._cursorLocked else None
+        if self._cursorLocked:
+            # The reported position lags a moving pointer (~16ms); pin the real
+            # cursor onto the origin so it, the glyph and the ghost coincide.
+            self._warpTo(self._pointerScreenX, self._pointerScreenY)
+            # Only hide when a ghost pointer stands in for it.
+            if self.cursorHider and self.overlay:
+                self.cursorHider.hide()
         self.mode = mode
         label = "hold" if mode == Mode.HOLD_AUTOSCROLL else "toggle"
         log.info(
@@ -199,12 +220,18 @@ class MiddleDaemon:
         )
         if self.overlay:
             self.overlay.requestShow(focus.cursorX, focus.cursorY)
+            if self._cursorLocked:
+                self.overlay.requestGhost(focus.cursorX, focus.cursorY)
 
     def _forwardAutoscrollMotion(self, ui: UInput, code: int, value: int) -> None:
-        """Forward pointer motion, clamped to availableGeometry (excludes panels).
+        """Track pointer motion, clamped to availableGeometry (excludes panels).
 
         Scroll vector is derived from this clamped on-screen position (not raw
         physical deltas), so pushing into the panel cannot accumulate drift.
+
+        Locked: nothing reaches the compositor — the real cursor stays on the
+        origin so the pane under it keeps receiving the wheel (Discord's chat
+        box / menus no longer steal it). Only the ghost pointer moves.
         """
         focus = self.focusHub.snapshot()
         workArea = focus.workArea
@@ -226,6 +253,10 @@ class MiddleDaemon:
             deliver = int(round(newPos - self._pointerScreenY))
             self._pointerScreenY = newPos
 
+        if self._cursorLocked:
+            if deliver and self.overlay:
+                self.overlay.requestGhost(self._pointerScreenX, self._pointerScreenY)
+            return
         if deliver:
             injectRelative(ui, code, deliver)
             syn(ui)
@@ -238,9 +269,30 @@ class MiddleDaemon:
             self._pointerScreenY - float(originY),
         )
 
+    def _releaseCursorLock(self) -> None:
+        """Move the real cursor to where the ghost pointer was brought."""
+        if not self._cursorLocked:
+            return
+        self._cursorLocked = False
+        self._warpTo(self._pointerScreenX, self._pointerScreenY)
+        self._lockDesktop = None
+        if self.cursorHider:
+            self.cursorHider.show()
+
+    def _warpTo(self, x: float, y: float) -> None:
+        if self.warp is None or self._lockDesktop is None:
+            return
+        try:
+            warpPointer(self.warp, x, y, self._lockDesktop)
+        except OSError as error:
+            log.warning("cursor warp failed: %s", error)
+            return
+        log.debug("cursor warp → (%.0f,%.0f)", x, y)
+
     def _leaveAutoscroll(self) -> None:
         if self.mode in (Mode.AUTOSCROLL, Mode.HOLD_AUTOSCROLL):
             log.info("autoscroll OFF")
+        self._releaseCursorLock()
         self.mode = Mode.IDLE
         self._wheelAccumX = 0.0
         self._wheelAccumY = 0.0
@@ -521,6 +573,8 @@ class MiddleDaemon:
 
             if self.mode in (Mode.AUTOSCROLL, Mode.HOLD_AUTOSCROLL):
                 self._flushScroll(ui)
+                if self.cursorHider and self._cursorLocked:
+                    self.cursorHider.renew()
 
             for event in batch:
                 self._handleEvent(ui, event, passthroughMiddle)
@@ -546,6 +600,14 @@ class MiddleDaemon:
         ui = createVirtualMouse()
         self.ui = ui
         log.info("Virtual mouse ready")
+
+        if self.config.lockCursor:
+            try:
+                self.warp = createWarpPointer()
+                log.info("Warp pointer ready (cursor lock on)")
+            except OSError as error:
+                log.warning("warp pointer unavailable, cursor lock off: %s", error)
+                self.warp = None
 
         try:
             self.modifiers = ModifierTracker.open()
@@ -592,4 +654,7 @@ class MiddleDaemon:
             self.pointer = None
             ui.close()
             self.ui = None
+            if self.warp is not None:
+                self.warp.close()
+                self.warp = None
             log.info("Daemon stopped")

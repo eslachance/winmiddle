@@ -82,6 +82,9 @@ class Config:
     # Noisy middle-click mice (e.g. Logitech M720) emit accidental wheel ticks.
     exitOnWheel: bool = False
     wheelGraceMs: float = 450.0
+    # Pin the real pointer at the origin while scrolling (app under it keeps
+    # getting the wheel), draw a ghost pointer instead, warp there on release.
+    lockCursor: bool = True
     # Browsers: with hold, tap = real middle-click and hold = winmiddle scroll.
     # Toggle-only (hold off) still full-passthrough so browser native autoscroll runs.
     nativeMiddleApps: list[str] = field(
@@ -185,6 +188,7 @@ def configToToml(cfg: Config) -> str:
         f"hz = {cfg.scrollHz:g}",
         f"exit_on_wheel = {'true' if cfg.exitOnWheel else 'false'}",
         f"wheel_grace_ms = {cfg.wheelGraceMs:g}",
+        f"lock_cursor = {'true' if cfg.lockCursor else 'false'}",
         f"deadzone_px = {cfg.deadzonePx:g}",
         f"ref_distance_px = {cfg.refDistancePx:g}",
         f"ref_nps = {cfg.refNotchesPerSec:g}",
@@ -293,6 +297,8 @@ def loadConfig(path: Path | None = None) -> Config:
     if "exit_on_wheel" in scroll:
         cfg.exitOnWheel = bool(scroll["exit_on_wheel"])
     cfg.wheelGraceMs = float(scroll.get("wheel_grace_ms", cfg.wheelGraceMs))
+    if "lock_cursor" in scroll:
+        cfg.lockCursor = bool(scroll["lock_cursor"])
 
     if "native_middle" in apps:
         cfg.nativeMiddleApps = [str(x) for x in apps["native_middle"]]
@@ -351,6 +357,9 @@ click_max_ms = 350
 hz = 60
 exit_on_wheel = false
 wheel_grace_ms = 450
+# Keep the real cursor pinned where scrolling started (so Discord & co. keep
+# scrolling the same pane), show a ghost pointer, and jump there on release.
+lock_cursor = true
 
 [apps]
 # Extra gate: only start autoscroll when AT-SPI says the target looks scrollable.

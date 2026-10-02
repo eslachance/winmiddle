@@ -14,6 +14,10 @@ winmiddle installed.
        systemctl --user status winmiddle
        journalctl --user -u winmiddle -f
 
+  The bundled KWin effect (winmiddlecursor) only loads in the KWin version it
+  was built for. After a KWin upgrade, rebuild this package to keep the real
+  cursor hidden while scrolling (otherwise it just stays visible).
+
 Settings: winmiddle-ui
 Config:   ~/.config/winmiddle/config.toml
 EOF

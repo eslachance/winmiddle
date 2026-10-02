@@ -12,7 +12,8 @@ The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** 
 1. **Small 48×48 origin glyph only** (`winmiddle/cursor.py`), placed at the middle-click point via **LayerShell** (`Top|Left` anchors + margins).
 2. **Paint the glyph** — never `QGuiApplication.setOverrideCursor` / `changeOverrideCursor` for the indicator.
 3. **No fullscreen overlay** under the pointer. A surface under the cursor steals wheel events on Wayland.
-4. **Direction** = emphasize arms on the fixed origin glyph from the scroll vector. **No floating arrow** that follows the pointer.
+4. **Direction** = emphasize arms on the fixed origin glyph from the scroll vector. **No floating direction arrow** that follows the pointer.
+7. **Cursor lock** (`scroll.lock_cursor`, default on): during autoscroll the daemon does **not** forward motion, so the real pointer stays on the origin. A **ghost pointer** (themed Xcursor arrow, own 1-surface LayerShell, empty input region) shows the clamped virtual position. On exit the real cursor is placed there **once** via the absolute `winmiddle warp pointer` uinput device (relative injection is accelerated by libinput → misses). The real cursor is also warped onto the origin at lock-in (reported position lags a moving pointer), and hidden while locked by the optional `winmiddlecursor` KWin effect (`kwin-effect/`, D-Bus Hide(timeoutMs)/Show with fail-safe re-show).
 5. **Empty `QWindow` input region** (`setMask(QRegion())`) + `WindowTransparentForInput`. Never `QWidget.setMask` (clips painting).
 6. **Scroll** = daemon uinput `REL_WHEEL` / `REL_WHEEL_HI_RES` to the virtual mouse while the physical device is grabbed.
 
@@ -25,4 +26,4 @@ The autoscroll indicator + scroll path below is **working on Plasma 6 Wayland** 
 
 ## Panel / work-area note
 
-Clamp **forwarded** pointer motion to `availableGeometry` during autoscroll so the cursor stays off panels. Scroll/direction vector must use that **same clamped** on-screen position (no drift). Scrolling while over the panel is a known Wayland limit — do not park/hop the cursor to work around it (triggers CachyOS cursor-size animations).
+Clamp **forwarded** pointer motion to `availableGeometry` during autoscroll so the cursor stays off panels. Scroll/direction vector must use that **same clamped** on-screen position (no drift). Scrolling while over the panel is a known Wayland limit — do not park/hop the cursor to work around it (triggers CachyOS cursor-size animations). The single warp at the end of a locked scroll is fine; repeated hops are not.

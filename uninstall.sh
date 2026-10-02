@@ -23,6 +23,13 @@ if command -v kwriteconfig6 >/dev/null; then
 fi
 rm -rf "$KWIN_SCRIPT_DST"
 
+KWIN_EFFECT_SO="/usr/lib/qt6/plugins/kwin/effects/plugins/winmiddlecursor.so"
+if [[ -f "$KWIN_EFFECT_SO" ]] && ! pacman -Qqo "$KWIN_EFFECT_SO" >/dev/null 2>&1; then
+  log "Removing KWin cursor effect"
+  qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect winmiddlecursor 2>/dev/null || true
+  sudo rm -f "$KWIN_EFFECT_SO" || log "Could not remove $KWIN_EFFECT_SO"
+fi
+
 log "Removing launcher + package + desktop entries"
 rm -f "$BIN_DIR/winmiddle" "$BIN_DIR/winmiddle-ui"
 rm -f "$APP_DIR/winmiddle-overlay.desktop" "$APP_DIR/winmiddle.desktop"

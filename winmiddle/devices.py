@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Iterator
 
-from evdev import InputDevice, InputEvent, UInput, ecodes, list_devices
+from evdev import AbsInfo, InputDevice, InputEvent, UInput, ecodes, list_devices
 
 log = logging.getLogger("winmiddle.devices")
 
@@ -37,6 +37,9 @@ REL_AXES = [
 
 
 VIRTUAL_MOUSE_NAME = "winmiddle virtual mouse"
+WARP_POINTER_NAME = "winmiddle warp pointer"
+# Absolute range of the warp pointer; libinput scales it onto the whole desktop.
+WARP_ABS_MAX = 32767
 
 
 class DeviceLostError(OSError):
@@ -503,6 +506,45 @@ def createVirtualMouse(name: str = "winmiddle virtual mouse") -> UInput:
         ecodes.EV_REL: REL_AXES,
     }
     return UInput(capabilities, name=name, bustype=ecodes.BUS_USB)
+
+
+def createWarpPointer(name: str = WARP_POINTER_NAME) -> UInput:
+    """Absolute pointer (VM-tablet style) used only to place the cursor exactly.
+
+    Relative injection goes through libinput pointer acceleration, so a large
+    one-shot delta lands in the wrong spot. An absolute device maps straight to
+    desktop coordinates. No REL axes → never mistaken for a physical mouse.
+    """
+    axis = AbsInfo(value=0, min=0, max=WARP_ABS_MAX, fuzz=0, flat=0, resolution=0)
+    capabilities = {
+        ecodes.EV_KEY: [ecodes.BTN_LEFT, ecodes.BTN_RIGHT, ecodes.BTN_MIDDLE],
+        ecodes.EV_ABS: [(ecodes.ABS_X, axis), (ecodes.ABS_Y, axis)],
+    }
+    return UInput(capabilities, name=name, bustype=ecodes.BUS_USB)
+
+
+def desktopToWarpAbs(
+    x: float, y: float, desktop: tuple[int, int, int, int]
+) -> tuple[int, int]:
+    """Global logical pixel → warp-pointer ABS values (KWin maps ABS over the desktop rect)."""
+    dx, dy, width, height = desktop
+    width = max(1, width)
+    height = max(1, height)
+    relX = min(max(x - dx, 0.0), float(width - 1))
+    relY = min(max(y - dy, 0.0), float(height - 1))
+    return (
+        int(round(relX * WARP_ABS_MAX / width)),
+        int(round(relY * WARP_ABS_MAX / height)),
+    )
+
+
+def warpPointer(
+    ui: UInput, x: float, y: float, desktop: tuple[int, int, int, int]
+) -> None:
+    absX, absY = desktopToWarpAbs(x, y, desktop)
+    ui.write(ecodes.EV_ABS, ecodes.ABS_X, absX)
+    ui.write(ecodes.EV_ABS, ecodes.ABS_Y, absY)
+    ui.syn()
 
 
 def grabDevice(device: InputDevice) -> None:

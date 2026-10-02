@@ -3,7 +3,7 @@ pkgname=winmiddle-git
 pkgver=0.2.2.r0.gbbb04e4
 pkgrel=1
 pkgdesc="Windows-faithful middle-click autoscroll for Linux (Plasma/Wayland) — git"
-arch=('any')
+arch=('x86_64')
 url="https://github.com/eslachance/winmiddle"
 license=('MIT')
 depends=(
@@ -18,9 +18,11 @@ makedepends=(
   'python-installer'
   'python-wheel'
   'python-hatchling'
+  'cmake'
+  'kwin'
 )
 optdepends=(
-  'kwin: focus/cursor helper script (recommended on Plasma)'
+  'kwin: focus/cursor helper script + cursor-hiding effect (recommended on Plasma)'
   'python-gobject: AT-SPI scrollable-under-cursor probing'
   'at-spi2-core: accessibility bus for scroll probing'
 )
@@ -39,10 +41,15 @@ pkgver() {
 build() {
   cd "$srcdir/winmiddle"
   python -m build --wheel --no-isolation
+  # KWin effect: hides the real pointer while autoscroll pins it. Tied to the
+  # exact KWin version (KWin skips it after an upgrade) — rebuild this package then.
+  cmake -S kwin-effect -B build-effect -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build-effect
 }
 
 package() {
   cd "$srcdir/winmiddle"
   python -m installer --destdir="$pkgdir" --prefix=/usr dist/*.whl
   bash packaging/install-data.sh "$pkgdir"
+  DESTDIR="$pkgdir" cmake --install build-effect
 }

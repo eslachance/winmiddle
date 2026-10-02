@@ -25,6 +25,8 @@ class FocusState:
     cursorY: int = 0
     # Screen availableGeometry (excludes panels): x, y, w, h — or None.
     workArea: tuple[int, int, int, int] | None = None
+    # Bounding rect of every screen (KWin global coords) — warp-pointer mapping.
+    desktop: tuple[int, int, int, int] | None = None
 
 
 def _workAreaAt(cursorX: int, cursorY: int) -> tuple[int, int, int, int] | None:
@@ -37,6 +39,19 @@ def _workAreaAt(cursorX: int, cursorY: int) -> tuple[int, int, int, int] | None:
         return None
     geo = screen.availableGeometry()
     return (geo.x(), geo.y(), geo.width(), geo.height())
+
+
+def _desktopRect() -> tuple[int, int, int, int] | None:
+    """Qt main-thread helper: union of all screen geometries."""
+    from PyQt6.QtCore import QRect
+    from PyQt6.QtGui import QGuiApplication
+
+    union = QRect()
+    for screen in QGuiApplication.screens():
+        union = union.united(screen.geometry())
+    if union.isEmpty():
+        return None
+    return (union.x(), union.y(), union.width(), union.height())
 
 
 class FocusHub(QObject):
@@ -56,6 +71,7 @@ class FocusHub(QObject):
                 cursorX=self._state.cursorX,
                 cursorY=self._state.cursorY,
                 workArea=self._state.workArea,
+                desktop=self._state.desktop,
             )
 
     def hasRecentUpdate(self, maxAgeSec: float = 2.0) -> bool:
@@ -83,10 +99,12 @@ class FocusHub(QObject):
                     self._state.cursorX = cx
                     self._state.cursorY = cy
         wa = _workAreaAt(cx, cy)
-        if wa is None:
-            return
+        desktop = _desktopRect()
         with self._lock:
-            self._state.workArea = wa
+            if wa is not None:
+                self._state.workArea = wa
+            if desktop is not None:
+                self._state.desktop = desktop
 
     @pyqtSlot(str, str, int, int)
     def Update(self, resourceClass: str, resourceName: str, cursorX: int, cursorY: int) -> None:
@@ -99,6 +117,7 @@ class FocusHub(QObject):
                 cursorX=int(cursorX),
                 cursorY=int(cursorY),
                 workArea=wa,
+                desktop=self._state.desktop,
             )
 
 

@@ -1,5 +1,8 @@
 /* winmiddle-focus — push active window + cursor pos to the winmiddle daemon */
+var lastPushMs = 0;
+
 function pushState() {
+    lastPushMs = Date.now();
     var window = workspace.activeWindow;
     var pos = workspace.cursorPos;
     var resourceClass = "";
@@ -29,6 +32,16 @@ timer.start();
 
 if (workspace.windowActivated) {
     workspace.windowActivated.connect(pushState);
+}
+
+// While the pointer moves, push faster (~60 Hz) so the autoscroll origin —
+// where winmiddle pins the real cursor — is not up to 50ms stale.
+if (workspace.cursorPosChanged) {
+    workspace.cursorPosChanged.connect(function () {
+        if (Date.now() - lastPushMs >= 16) {
+            pushState();
+        }
+    });
 }
 
 pushState();

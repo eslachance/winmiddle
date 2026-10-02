@@ -190,6 +190,9 @@ class SettingsWindow(QMainWindow):
         self.toggleCheck = QCheckBox("Click to toggle (Windows-style)")
         self.modifierGateCheck = QCheckBox("Require modifier key")
         self.overlayCheck = QCheckBox("Show origin indicator while scrolling")
+        self.lockCursorCheck = QCheckBox(
+            "Pin cursor while scrolling (ghost pointer follows; cursor jumps there on release)"
+        )
 
         self.modifierCombo = QComboBox()
         self.modifierCombo.addItems(["ctrl", "alt", "shift", "super"])
@@ -210,6 +213,7 @@ class SettingsWindow(QMainWindow):
         layout.addWidget(self.modifierDetails)
 
         layout.addWidget(self.overlayCheck)
+        layout.addWidget(self.lockCursorCheck)
 
         tip = QLabel(
             "Tip: Classic Windows = toggle only. Ctrl+middle hold = hold + Require modifier + ctrl + applies to hold."
@@ -447,6 +451,7 @@ class SettingsWindow(QMainWindow):
             self.modifierCombo.setCurrentText(cfg.activationModifier)
         self.modifierForCombo.setCurrentText(cfg.modifierFor)
         self.overlayCheck.setChecked(cfg.showOverlay)
+        self.lockCursorCheck.setChecked(cfg.lockCursor)
 
         self.speedCombo.blockSignals(True)
         self.speedCombo.setCurrentText(cfg.speed if cfg.speed in SPEED_PRESETS else "normal")
@@ -484,6 +489,7 @@ class SettingsWindow(QMainWindow):
             cfg.activationModifier = "none"
         cfg.modifierFor = self.modifierForCombo.currentText()
         cfg.showOverlay = self.overlayCheck.isChecked()
+        cfg.lockCursor = self.lockCursorCheck.isChecked()
 
         applySpeedPreset(cfg, self.speedCombo.currentText())
         # Keep any manual curve overrides from the form.

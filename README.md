@@ -104,11 +104,34 @@ Config: `~/.config/winmiddle/config.toml` (also edited by the settings UI)
 [scroll]
 drag_threshold_px = 50  # held move beyond this → hold-scroll (or Blender-style drag if hold off)
 deadzone_px = 12
+lock_cursor = true      # pin the real cursor while scrolling (see below)
 
 [apps]
 native_middle = ["firefox", "google-chrome", ...]  # tap=native; hold=scroll
 passthrough = ["steam_app", "blender", ...]        # never intercept
 require_scrollable = true                          # AT-SPI gate (skipped for native_middle)
+```
+
+### Cursor lock
+
+While autoscrolling, the real cursor stays pinned where scrolling started, so the
+pane under it keeps receiving the wheel. Without the lock, drifting onto Discord's
+chat box or a menu used to stop or redirect the scroll. A ghost copy of your
+themed pointer follows the mouse instead. On release, the real cursor jumps to
+where you brought the ghost. The jump uses a small absolute uinput device
+(`winmiddle warp pointer`), so pointer acceleration can't make it miss. Set
+`lock_cursor = false` (or untick it in the UI) to get the old free-moving cursor.
+
+Only KWin can hide the real cursor, so the pinned one stays visible next to the ghost
+unless the small bundled KWin effect `winmiddlecursor` (`kwin-effect/`) is installed.
+The AUR packages and `install.sh` build and install it. KWin only loads it if it was
+built for the exact running KWin version. After a KWin upgrade, rebuild (reinstall
+the AUR package or rerun `./install.sh`); until then the cursor is simply visible again.
+Manual build:
+
+```bash
+cmake -S kwin-effect -B kwin-effect/build -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build kwin-effect/build && sudo cmake --install kwin-effect/build
 ```
 
 ## Requirements

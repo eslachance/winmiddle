@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Category": "Accessibility",
+        "Description": "Lets winmiddle hide the real pointer while it is pinned during autoscroll",
+        "EnabledByDefault": true,
+        "License": "MIT",
+        "Name": "winmiddle cursor",
+        "Version": "@KWIN_PLUGIN_VERSION@"
+    }
+}

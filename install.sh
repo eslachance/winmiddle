@@ -42,6 +42,22 @@ cp -a "$ROOT_DIR/kwin-script/winmiddle-focus/metadata.json" "$KWIN_SCRIPT_DST/"
 cp -a "$ROOT_DIR/kwin-script/winmiddle-focus/contents/code/main.js" "$KWIN_SCRIPT_DST/contents/code/"
 ok "KWin script → $KWIN_SCRIPT_DST"
 
+log "Building KWin cursor effect (hides the pinned pointer while scrolling)"
+EFFECT_BUILD="$ROOT_DIR/kwin-effect/build"
+if command -v cmake >/dev/null 2>&1 && [[ -f /usr/include/kwin/effect/effect.h ]] \
+  && cmake -S "$ROOT_DIR/kwin-effect" -B "$EFFECT_BUILD" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr >/dev/null \
+  && cmake --build "$EFFECT_BUILD" >/dev/null; then
+  # KWin only scans system plugin dirs → needs root. Rerun ./install.sh after KWin upgrades.
+  if sudo cmake --install "$EFFECT_BUILD" >/dev/null; then
+    qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect winmiddlecursor >/dev/null 2>&1 || true
+    ok "KWin effect winmiddlecursor installed"
+  else
+    warn "Skipped installing the KWin effect (sudo); the pinned cursor stays visible while scrolling"
+  fi
+else
+  warn "Could not build the KWin effect (needs cmake + kwin headers); the pinned cursor stays visible while scrolling"
+fi
+
 log "Installing systemd --user unit + desktop entries"
 install -Dm644 "$ROOT_DIR/systemd/winmiddle.service" "$UNIT_DIR/winmiddle.service"
 sed -i "s|^ExecStart=.*|ExecStart=$BIN_DIR/winmiddle -v|" "$UNIT_DIR/winmiddle.service"
