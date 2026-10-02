@@ -8,16 +8,29 @@ Primary target: **KDE Plasma (Wayland) on Arch-based distros** (Arch, CachyOS, E
 
 ## Install
 
-### AUR (recommended)
+### Arch: build the package straight from GitHub (recommended while the AUR is down)
+
+The AUR is currently unavailable, so `paru`/`yay` can't fetch the packages. The same PKGBUILDs live in this repo; download one and let `makepkg` build and install it — no clone needed:
 
 ```bash
-# Release package
-paru -S winmiddle
-# or: yay -S winmiddle
-
-# Tracking git main
-paru -S winmiddle-git
+mkdir -p /tmp/winmiddle-pkg && cd /tmp/winmiddle-pkg
+curl -fL --remote-name-all \
+  https://raw.githubusercontent.com/eslachance/winmiddle/main/packaging/aur/winmiddle/PKGBUILD \
+  https://raw.githubusercontent.com/eslachance/winmiddle/main/packaging/aur/winmiddle/winmiddle.install
+makepkg -si
 ```
+
+To track git `main` instead of the latest release, use the `winmiddle-git` PKGBUILD:
+
+```bash
+mkdir -p /tmp/winmiddle-git-pkg && cd /tmp/winmiddle-git-pkg
+curl -fL --remote-name-all \
+  https://raw.githubusercontent.com/eslachance/winmiddle/main/packaging/aur/winmiddle-git/PKGBUILD \
+  https://raw.githubusercontent.com/eslachance/winmiddle/main/packaging/aur/winmiddle-git/winmiddle.install
+makepkg -si
+```
+
+These produce the exact packages the AUR ships (`winmiddle` / `winmiddle-git`), so once the AUR is back, `paru -S winmiddle` (or `winmiddle-git`) takes over updates seamlessly. Until then, rerun the commands above to update.
 
 That installs both the daemon (`winmiddle`) and the settings GUI (`winmiddle-ui`, also in the app launcher as **winmiddle**).
 
@@ -31,17 +44,39 @@ winmiddle-ui
 
 Log out and back in once (KWin only reapplies primary-selection on session start).
 
-### From source
+### AUR
+
+When the AUR is reachable:
 
 ```bash
-git clone https://github.com/eslachance/winscroll.git
-cd winscroll
+# Release package
+paru -S winmiddle
+# or: yay -S winmiddle
+
+# Tracking git main
+paru -S winmiddle-git
+```
+
+### From source (any distro, user-local)
+
+No clone required — grab the `main` tarball and run the installer from it:
+
+```bash
+curl -fL https://github.com/eslachance/winmiddle/archive/refs/heads/main.tar.gz | tar xz -C /tmp
+/tmp/winmiddle-main/install.sh
+```
+
+Or from a checkout:
+
+```bash
+git clone https://github.com/eslachance/winmiddle.git
+cd winmiddle
 ./install.sh
 ```
 
-`install.sh` installs `winmiddle`, `winmiddle-ui`, the desktop entry, and the icon under `~/.local`.
+`install.sh` installs `winmiddle`, `winmiddle-ui`, the desktop entry, and the icon under `~/.local`, then runs `winmiddle --setup`. The extracted folder can be deleted afterwards.
 
-Uninstall from-source installs with `./uninstall.sh`. Packaged installs: `sudo pacman -R winmiddle` (or `winmiddle-git`).
+Uninstall from-source installs with `./uninstall.sh` (from the tarball folder or checkout). Packaged installs: `sudo pacman -R winmiddle` (or `winmiddle-git`).
 
 ## Settings UI
 
